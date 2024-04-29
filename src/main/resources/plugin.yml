@@ -1,0 +1,3 @@
+name: AntiCheatBase
+version: '${project.version}'
+main: net.echo.anticheatbase.AntiCheat
