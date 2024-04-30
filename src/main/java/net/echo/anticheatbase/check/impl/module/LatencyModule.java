@@ -76,7 +76,7 @@ public class LatencyModule extends AbstractCheck {
 
             entry.getValue().forEach(callback -> callback.accept(transaction));
             iterator.remove();
-        };
+        }
     }
 
     public AtomicInteger getLastReceivedTransaction() {
