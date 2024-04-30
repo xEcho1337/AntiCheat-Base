@@ -11,6 +11,8 @@ public class PlayerManager {
     private final Map<UUID, WrappedPlayer> players = new ConcurrentHashMap<>();
 
     public void removePlayer(UUID uuid) {
+        if (uuid == null) return;
+
         players.remove(uuid);
     }
 

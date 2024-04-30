@@ -1,9 +1,6 @@
 package net.echo.anticheatbase.listeners;
 
-import com.github.retrooper.packetevents.event.PacketListenerAbstract;
-import com.github.retrooper.packetevents.event.PacketListenerPriority;
-import com.github.retrooper.packetevents.event.PacketReceiveEvent;
-import com.github.retrooper.packetevents.event.PacketSendEvent;
+import com.github.retrooper.packetevents.event.*;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import net.echo.anticheatbase.AntiCheat;
 import net.echo.anticheatbase.check.model.AbstractCheck;
@@ -45,5 +42,10 @@ public class PacketListener extends PacketListenerAbstract {
         for (AbstractCheck check : player.getCheckManager().getAllChecks()) {
             check.onPacketSend(event);
         }
+    }
+
+    @Override
+    public void onUserDisconnect(UserDisconnectEvent event) {
+        antiCheat.getPlayerManager().removePlayer(event.getUser().getUUID());
     }
 }
