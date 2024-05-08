@@ -7,6 +7,7 @@ import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientWi
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerWindowConfirmation;
 import net.echo.anticheatbase.check.model.AbstractCheck;
 import net.echo.anticheatbase.player.model.WrappedPlayer;
+import net.echo.anticheatbase.player.model.data.TransactionData;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,9 +17,10 @@ import java.util.function.Consumer;
 public class LatencyModule extends AbstractCheck {
 
     private final Map<Integer, TransactionCallbacks> pendingCallbacks = new ConcurrentHashMap<>();
+    private final Queue<TransactionData> sentTransactions = new LinkedList<>();
     private final AtomicInteger lastReceivedTransaction = new AtomicInteger(0);
-    private final AtomicInteger lastSentTransaction = new AtomicInteger(0);
-    private final Queue<Integer> sentTransactions = new LinkedList<>();
+    private final AtomicInteger lastSentTransaction = new AtomicInteger(1);
+    private long lastTransactionTimestamp;
 
     public LatencyModule(WrappedPlayer player) {
         super(player);
@@ -27,44 +29,47 @@ public class LatencyModule extends AbstractCheck {
     public void addCallback(int transaction, Consumer<Integer> callback) {
         pendingCallbacks.computeIfAbsent(transaction, key -> new TransactionCallbacks()).add(callback);
     }
-    
+
     public void addCurrentCallback(Consumer<Integer> callback) {
+        if (callback == null) return;
         addCallback(lastSentTransaction.get(), callback);
     }
-    
+
     public void addNextCallback(Consumer<Integer> callback) {
         addCallback(lastSentTransaction.get() + 1, callback);
     }
 
-    public void sendTransaction() {
+    public void sendTransaction(Consumer<Integer> callback) {
         short transaction = (short) lastSentTransaction.decrementAndGet();
 
         WrapperPlayServerWindowConfirmation wrapper = new WrapperPlayServerWindowConfirmation(0, transaction, false);
-        player.getPacketUser().sendPacket(wrapper);
+        player.getPacketUser().writePacket(wrapper);
 
-        sentTransactions.add((int) transaction);
+        TransactionData data = new TransactionData(transaction, System.nanoTime());
+        sentTransactions.add(data);
+
+        addCurrentCallback(callback);
+        lastTransactionTimestamp = System.currentTimeMillis();
     }
 
     @Override
     public void onPacketReceive(PacketReceiveEvent event) {
         if (event.getPacketType() == PacketType.Play.Client.WINDOW_CONFIRMATION) {
             WrapperPlayClientWindowConfirmation wrapper = new WrapperPlayClientWindowConfirmation(event);
-
-            handleTransaction(wrapper.getActionId());
+            handleTransaction(wrapper.getActionId(), event);
         }
 
         if (event.getPacketType() == PacketType.Play.Client.PONG) {
             WrapperPlayClientPong wrapper = new WrapperPlayClientPong(event);
-
-            handleTransaction(wrapper.getId());
+            handleTransaction(wrapper.getId(), event);
         }
     }
 
-    public void handleTransaction(int transaction) {
-        if (!sentTransactions.contains(transaction)) return;
+    public void handleTransaction(int transaction, PacketReceiveEvent event) {
+        if (!contains(transaction)) return;
 
         lastReceivedTransaction.set(transaction);
-        sentTransactions.remove(transaction);
+        TransactionData current = sentTransactions.stream().filter(data -> data.getId() == transaction).findFirst().orElse(null);
 
         // If the player has skipped (or cancelled) transactions we still run the callbacks
         Iterator<Map.Entry<Integer, TransactionCallbacks>> iterator = pendingCallbacks.entrySet().iterator();
@@ -77,6 +82,13 @@ public class LatencyModule extends AbstractCheck {
             entry.getValue().forEach(callback -> callback.accept(transaction));
             iterator.remove();
         }
+
+        // Remove after the reception to make TickSpeed work
+        event.getPostTasks().add(() -> sentTransactions.remove(current));
+    }
+
+    public Queue<TransactionData> getQueue() {
+        return sentTransactions;
     }
 
     public AtomicInteger getLastReceivedTransaction() {
@@ -87,8 +99,12 @@ public class LatencyModule extends AbstractCheck {
         return lastSentTransaction;
     }
 
-    public Queue<Integer> getSentTransactions() {
-        return sentTransactions;
+    public boolean contains(int transaction) {
+        return sentTransactions.stream().anyMatch(data -> data.getId() == transaction);
+    }
+
+    public long getLastTransactionTimestamp() {
+        return lastTransactionTimestamp;
     }
 
     // Just for code clean up
