@@ -84,7 +84,7 @@ public class LatencyModule extends AbstractCheck {
             iterator.remove();
         }
 
-        // Remove after the reception to make TickSpeed work
+        // Remove from the queue after the reception
         event.getPostTasks().add(() -> sentTransactions.remove(current));
     }
 
