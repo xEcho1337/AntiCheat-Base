@@ -1,6 +1,7 @@
 package net.echo.anticheatbase.check.impl.module;
 
 import com.github.retrooper.packetevents.event.PacketReceiveEvent;
+import com.github.retrooper.packetevents.netty.channel.ChannelHelper;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPong;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientWindowConfirmation;
@@ -43,7 +44,7 @@ public class LatencyModule extends AbstractCheck {
         short transaction = (short) lastSentTransaction.decrementAndGet();
 
         WrapperPlayServerWindowConfirmation wrapper = new WrapperPlayServerWindowConfirmation(0, transaction, false);
-        player.getPacketUser().writePacket(wrapper);
+        ChannelHelper.runInEventLoop(player.getPacketUser().getChannel(), () -> player.getPacketUser().writePacket(wrapper));
 
         TransactionData data = new TransactionData(transaction, System.nanoTime());
         sentTransactions.add(data);
